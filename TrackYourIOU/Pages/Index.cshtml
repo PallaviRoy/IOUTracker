@@ -1,0 +1,179 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<!--Loan List-->
+<h1>Loan Entries</h1>
+
+<ul id="LoanList">
+</ul>
+
+<!--New Loan Form-->
+<div>
+    <hr />
+    <button type="button" id="Add" class="btn btn-primary">Add a new entry</button>
+    <br /><br />
+    <form id="createLoanForm" class="form" style="display: none;">
+        <div class="form-group">
+            <label for="loanAmount">Amount</label>
+            <input type="text" class="form-control" id="loanAmount" placeholder="Loan Amount" />
+        </div>                
+        <div class="form-group">
+            <label for="nameOfBorrower">Borrower</label>
+            <input type="text" class="form-control" id="nameOfBorrower" placeholder="Name" />
+        </div>
+        <div class="form-group">
+            <label for="loanedDate">Date Of Loan</label>
+            <input type="text" class="form-control" id="loanedDate" placeholder="Loan Date" />
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+</div>
+
+
+@section Scripts {
+    <script>
+        
+        $(function() {
+            loadLoans();
+            $("#createLoanForm").submit(function() {
+                    createLoan();
+                    return false;
+            });
+        });
+
+        //Show New Loan Form
+        $("#Add").click(function(){
+            $("#createLoanForm").toggle();
+            return false;
+        });
+
+        function loadLoans() {
+            $.ajax({
+                url: "/api/loans",
+                dataType: 'json',
+                contentType: 'application/json',
+                method: 'GET'
+            }).done(function(responseJSON,status,xhr) {
+                // process the response when status code is 200-299
+                LoanList(responseJSON);
+            }).fail(function(xhr,status,error) {
+                // deal with error from server (status code 400-599)
+                alert("There was an error retrieving the loan data");
+            });
+        }
+
+
+        function LoanList(loans) {
+            $("#LoanList").empty();
+                $.each(loans, function (index, item) {
+                var li = $('<li loan-id="' + item.id + '"></li>');
+                $(li).text(item.loanAmount + ' - ' + item.nameOfBorrower + '-' + item.loanedDate + '- Loan Repaid ' + item.isLoanRepaid);
+                
+                $(li).append('<a href="#" class="pull-right loan-delete">delete</a>')
+                
+                if(!item.isLoanRepaid) {
+                    $(li).append('<span class="pull-right">&nbsp;|&nbsp;</span>');
+                    $(li).append('<a href="#" class="pull-right loan-settle">settle</a>');
+                    var loanForm = $('<div style="display: none;" class="row loan-form"></div>');
+                    var loanInput = $('<div class="col-sm-8"><input type="text" class="form-control loan-repaymentDate" placeholder="Enter repayment date" /></div>');
+                    var loanbutton = $('<div class="col-sm-4"><button class="btn btn-primary settle-save">Save</button> <button class="btn btn-default settle-cancel">Cancel</button></div>');
+                    
+                    $(loanForm).append(loanInput);
+                    $(loanForm).append(loanbutton);
+                    $(li).append(loanForm);
+                }
+
+                $("#LoanList").append(li);
+                });
+        }
+
+        function createLoan() {
+            var requestData = {
+                loanAmount: $("#loanAmount").val(),
+                nameOfBorrower: $("#nameOfBorrower").val(),
+                loanedDate: $("#loanedDate").val() 
+            };
+            $.ajax({
+                url: '/api/loans',
+                dataType: 'json',
+                contentType: 'application/json',
+                method: 'POST',
+                data: JSON.stringify(requestData)
+            }).done(function(responseData, status, xhr) {
+                loadLoans(); 
+                $("#loanAmount").val(""); 
+                $("#nameOfBorrower").val(""); 
+                $("#loanedDate").val(""); 
+            }).fail(function(xhr, status, error) {
+                alert("There was an error saving your loan");
+            });
+        }
+
+        //Delete Loan Entry
+        $("#LoanList").on('click', 'a.loan-delete', function() {
+            var id = $(this).parents("li").attr('loan-id');
+            deleteLoan(id);
+            return false;
+        });
+
+        function deleteLoan(id) {
+            $.ajax({
+                url: '/api/loans/' + id,
+                dataType: 'json',
+                contentType: 'application/json',
+                method: 'DELETE',
+            }).done(function(responseData, status, xhr) {
+                loadLoans(); // RELOAD THE loan DATA                
+            }).fail(function(xhr, status, error) {
+                alert("detle There was an error deleting your loan");
+            });
+        }
+
+        //Settle Loan
+        $("#LoanList").on('click', 'a.loan-settle', function() {
+            $(this).parents("li").find('.loan-form').show();
+            return false;
+        });
+
+        //Settle Loan - Cancel
+        $("#LoanList").on('click', 'button.settle-cancel', function() {
+            $(this).parents("li").find('.loan-form').hide();
+            return false;
+        });
+
+        //Settle Loan - Update Repayment Date
+        $("#LoanList").on('click', 'button.settle-save', function() {
+            var id = $(this).parents("li").attr('loan-id');
+            var repaymentDate = $(this).parents("li").find('.loan-form .loan-repaymentDate').val();
+            updateRepaymentDate(id, repaymentDate, function() {
+                $(this).parents("li").find('.loan-form').hide();
+            });
+            return false;
+        });
+        
+        function updateRepaymentDate(id, repaymentDate, callback) {
+            var requestData = {
+                repaymentDate: repaymentDate
+            };
+            
+            $.ajax({
+                url: '/api/loans/repay/' + id,
+                dataType: 'json',
+                contentType: 'application/json',
+                method: 'PUT',
+                data: JSON.stringify(requestData)
+            }).done(function(responseData, status, xhr) {
+                loadLoans();
+                if (callback) {
+                    callback();
+                }
+            }).fail(function(xhr, status, error) {
+                alert("There was an error saving your payment");
+            });
+        }
+
+    </script>
+}
